@@ -64,3 +64,6 @@ Thumbs.db
 .system_generated/
 .gemini/
 scratch/
+
+# Local specification PDFs and prompt briefs
+*.pdf
