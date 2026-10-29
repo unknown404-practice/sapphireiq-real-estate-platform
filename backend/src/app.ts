@@ -78,7 +78,6 @@ export function createApp(): Application {
         health: '/api/health',
         properties: '/api/properties',
       },
-      message: 'Welcome to SapphireIQ API. Visit http://localhost:5173 to access the frontend web application.',
     });
   });
 
