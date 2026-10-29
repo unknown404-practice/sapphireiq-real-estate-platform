@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables & secrets (Never commit real credentials)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+frontend/.env
+*.env
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+backend/dist/
+frontend/dist/
+*.tsbuildinfo
+
+# Uploaded media & temporary disk storage
+uploads/
+backend/uploads/
+!uploads/.gitkeep
+!backend/uploads/.gitkeep
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+!frontend/src/assets/**/*
+!frontend/public/**/*
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Coverage and testing artifacts
+coverage/
+.nyc_output/
+
+# IDE & Operating System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Agent generated artifacts & scratch files
+.system_generated/
+.gemini/
+scratch/
