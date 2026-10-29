@@ -1,208 +1,315 @@
-# SapphireIQ - Premium Real Estate Platform for India
+# SapphireIQ — Premium Full-Stack Real Estate Platform
 
-SapphireIQ is a full-stack real estate platform built with **React + TypeScript**, **Node.js + Express + TypeScript**, and **MongoDB (Mongoose)**. The platform enables browsing and filtering verified Indian properties for sale and rent, direct viewing appointment bookings (both guest and authenticated), user property listing management with server-side ownership enforcement, and a comprehensive user dashboard.
+[![Frontend](https://img.shields.io/badge/Frontend-Vercel%20Live-black?style=for-the-badge&logo=vercel)](https://sapphireiq-real-estate-platform.vercel.app/)
+[![Backend](https://img.shields.io/badge/Backend-Render%20Live-46E3B7?style=for-the-badge&logo=render)](https://sapphireiq-real-estate-platform.onrender.com/api/health)
+[![GitHub](https://img.shields.io/badge/Repository-GitHub-181717?style=for-the-badge&logo=github)](https://github.com/unknown404-practice/sapphireiq-real-estate-platform)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+
+SapphireIQ is an enterprise-grade full-stack real estate platform engineered with **React 18 + TypeScript**, **Node.js + Express + TypeScript**, and **MongoDB Atlas (Mongoose)**. The platform provides property exploration across major Indian metropolitan areas, multi-criteria filtering, verified image pipelines with full image buffer decoding, atomic multi-image rollback, booking workflows for both guest and authenticated users, and server-enforced role-based access control.
 
 ---
 
-## 1. Architecture & Tech Stack
+## 🌐 Live Production Deployments
+
+| Resource | Target URL | Status | Description |
+| :--- | :--- | :--- | :--- |
+| **Frontend Web App** | [https://sapphireiq-real-estate-platform.vercel.app/](https://sapphireiq-real-estate-platform.vercel.app/) | `Live` | Single Page Application hosted on Vercel Edge Network |
+| **Backend REST API** | [https://sapphireiq-real-estate-platform.onrender.com/](https://sapphireiq-real-estate-platform.onrender.com/) | `Live` | Node.js Express API service deployed on Render Web Service |
+| **API Health Check** | [https://sapphireiq-real-estate-platform.onrender.com/api/health](https://sapphireiq-real-estate-platform.onrender.com/api/health) | `Active` | Production database readiness probe and uptime monitor |
+| **GitHub Repository** | [https://github.com/unknown404-practice/sapphireiq-real-estate-platform.git](https://github.com/unknown404-practice/sapphireiq-real-estate-platform.git) | `Active` | Full-stack monorepo source code and audit test suite |
+
+---
+
+## 🔑 Pre-Configured Demo Credentials
+
+The platform includes demo accounts for testing role-based privileges:
+
+| Role | Email Address | Password | Permissions |
+| :--- | :--- | :--- | :--- |
+| **Standard User** | `user1@sapphireiq.local` | `Password123!` | Search properties, book viewings, view personal appointments |
+| **Property Owner** | `user2@sapphireiq.local` | `Password123!` | Create, update, upload images, and manage property listings |
+| **Platform Admin** | `admin@sapphireiq.local` | `AdminPassword123!` | Full administrative moderation over properties and bookings |
+
+---
+
+## 🏛️ System Architecture & Data Flow
+
+```mermaid
+flowchart TD
+    subgraph Client ["Client Tier (Vercel Edge Network)"]
+        SPA["React 18 + Vite SPA<br/>sapphireiq-real-estate-platform.vercel.app"]
+        Router["React Router v6<br/>Client-Side SPA Routing"]
+        AuthContext["Auth Context<br/>JWT Management & Session Cache"]
+        APIClient["Axios/Fetch API Client<br/>Custom Interceptors & Typed Contracts"]
+    end
+
+    subgraph Security ["Edge Security & Gateway"]
+        HTTPS["TLS / HTTPS Encryption"]
+        Helmet["HTTP Security Headers (Helmet)"]
+        CORS["Strict CORS Allowlist<br/>*.vercel.app + Configured Origins"]
+        RateLimit["Express Rate Limiting<br/>Auth & Public Booking Protections"]
+    end
+
+    subgraph API ["Backend API Tier (Render Web Service)"]
+        Express["Express.js Server Application<br/>Port 10000 / Production Mode"]
+        JWTAuth["JWT Authentication Middleware<br/>Bearer Token Verification"]
+        OwnershipGuard["Server-Side Ownership Enforcement<br/>req.user.id === resource.owner"]
+        ImageService["Sharp Image Pipeline<br/>Header + Full Pixel Decoding + 16MP Bomb Defense"]
+        Sweeper["Automated Orphan Sweeper<br/>1-Hour In-Flight Grace Period"]
+    end
+
+    subgraph Database ["Persistence Tier (Cloud Infrastructure)"]
+        MongoAtlas[("MongoDB Atlas Cloud Cluster<br/>Users, Properties, Appointments, OrphanedUploads")]
+        DiskStorage[("Static Upload Storage<br/>Sanitized WebP / JPEG / PNG Files")]
+    end
+
+    SPA --> Router
+    Router --> AuthContext
+    AuthContext --> APIClient
+    APIClient --> HTTPS
+    HTTPS --> Helmet
+    Helmet --> CORS
+    CORS --> RateLimit
+    RateLimit --> Express
+    Express --> JWTAuth
+    JWTAuth --> OwnershipGuard
+    OwnershipGuard --> MongoAtlas
+    Express --> ImageService
+    ImageService --> DiskStorage
+    Express --> Sweeper
+    Sweeper --> DiskStorage
+    Sweeper --> MongoAtlas
+```
+
+---
+
+## 📂 Complete Project Directory Tree
 
 ```
-sapphireiq/
-├── backend/
-│   ├── src/
-│   │   ├── config/          # Environment variables & DB connection
-│   │   ├── controllers/     # Auth, Property, and Appointment business logic
-│   │   ├── middleware/      # JWT auth, strict CORS, Helmet, error handler, rate limiters
-│   │   ├── models/          # User, Property, and Appointment Mongoose schemas
-│   │   ├── routes/          # Express API route definitions
-│   │   ├── services/        # Email (Nodemailer) and Image upload (ImageKit/Disk)
-│   │   ├── scripts/         # Realistic Indian demo database seeder
-│   │   ├── types/           # Shared backend TypeScript types
-│   │   ├── app.ts           # Express application setup
-│   │   └── server.ts        # Server entrypoint and graceful shutdown
-│   └── tests/               # Vitest + Supertest + In-Memory MongoDB test suite
-├── frontend/
-│   ├── public/              # Static assets, robots.txt, sitemap.xml
-│   ├── src/
-│   │   ├── components/      # Navbar, Footer, PropertyCard, ViewingModal, ProtectedRoute
-│   │   ├── context/         # AuthContext (JWT management & session state)
-│   │   ├── pages/           # Home, Properties, Detail, Dashboard, Login, Register, Forgot/Reset
-│   │   ├── services/        # Typed API client
-│   │   ├── types/           # Frontend TypeScript interfaces
-│   │   ├── utils/           # INR currency & date formatters
-│   │   ├── App.tsx          # React Router configuration with React.lazy
-│   │   └── main.tsx         # App bootstrap with Tailwind CSS
-└── docs/                    # Architecture Decision Record (ADR) and Agent Task Ledger
+sapphireiq-real-estate-platform/
+├── .env.example                               # Root environment configuration template
+├── .gitignore                                 # Git ignore rules for node_modules, dist, uploads, env
+├── package.json                               # Monorepo root workspace configuration
+├── package-lock.json                          # Monorepo dependency lockfile
+├── README.md                                  # Project documentation, architecture, and live links
+├── render.yaml                                # Render Infrastructure-as-Code deployment blueprint
+├── vercel.json                                # Root Vercel SPA client rewrite rules
+│
+├── backend/                                   # Node.js + Express + TypeScript API Service
+│   ├── .env.example                           # Backend environment variables template
+│   ├── package.json                           # Backend dependencies, types, and build scripts
+│   ├── tsconfig.json                          # TypeScript compiler settings for CommonJS build
+│   ├── vitest.config.ts                       # Vitest automated test configuration
+│   │
+│   ├── src/                                   # Application source code
+│   │   ├── app.ts                             # Express setup, Helmet, CORS, and root routes
+│   │   ├── server.ts                          # Server entrypoint and graceful shutdown listeners
+│   │   │
+│   │   ├── config/                            # Core configuration
+│   │   │   ├── database.ts                    # Mongoose database connection and disconnect logic
+│   │   │   └── env.ts                         # Validated environment variables and production fallbacks
+│   │   │
+│   │   ├── controllers/                       # Request handlers and business logic
+│   │   │   ├── appointmentController.ts       # Booking viewings (guest & authenticated)
+│   │   │   ├── authController.ts              # Register, login, forgot password, reset password
+│   │   │   └── propertyController.ts          # CRUD listings, filters, upload handlers, sweeps
+│   │   │
+│   │   ├── middleware/                        # Express middleware
+│   │   │   ├── auth.ts                        # JWT validation and authenticated request hydration
+│   │   │   ├── errorHandler.ts                # Sanitized error response formatter
+│   │   │   └── rateLimiter.ts                 # Rate limiters for auth, properties, and bookings
+│   │   │
+│   │   ├── models/                            # Mongoose schemas and model definitions
+│   │   │   ├── Appointment.ts                 # Viewing appointment schema & status constraints
+│   │   │   ├── OrphanedUpload.ts              # Tracked abandoned files for safe async sweep
+│   │   │   ├── Property.ts                    # Property schema, geocoding, pricing, and amenities
+│   │   │   └── User.ts                        # User credentials, roles (user, admin), and bcrypt hash
+│   │   │
+│   │   ├── routes/                            # Route mappings
+│   │   │   ├── appointmentRoutes.ts           # /api/appointments route definitions
+│   │   │   ├── authRoutes.ts                  # /api/auth route definitions
+│   │   │   ├── healthRoutes.ts                # /api/health probe route definition
+│   │   │   ├── index.ts                       # Aggregated API router mount (/api/*)
+│   │   │   └── propertyRoutes.ts              # /api/properties route definitions
+│   │   │
+│   │   ├── scripts/                           # Database automation scripts
+│   │   │   └── seed.ts                        # Realistic Indian property catalog seeder
+│   │   │
+│   │   ├── services/                          # Application services
+│   │   │   ├── emailService.ts                # Password reset emails via Nodemailer
+│   │   │   └── imageService.ts                # Sharp decoding, magic byte check, rollback, sweeper
+│   │   │
+│   │   └── types/                             # TypeScript interfaces & custom request types
+│   │       └── index.ts                       # AuthenticatedRequest, FileUploads, FilterParams
+│   │
+│   └── tests/                                 # Automated integration test suite
+│       ├── setup.ts                           # In-memory MongoDB lifecycle runner
+│       ├── health.test.ts                     # System probe and unknown route tests
+│       ├── auth.test.ts                       # Registration, password hashing, and login tests
+│       ├── properties.test.ts                 # Property CRUD and server authorization tests
+│       ├── appointments.test.ts               # Guest and user viewing appointment tests
+│       └── flaw_fixes.test.ts                 # 37 critical verification tests (Sharp, sweeper, rollback)
+│
+├── frontend/                                  # React 18 + Vite + Tailwind CSS Single Page App
+│   ├── .env.example                           # Frontend environment template (VITE_API_BASE_URL)
+│   ├── index.html                             # Single page HTML entrypoint
+│   ├── package.json                           # Frontend dependencies and Vite build scripts
+│   ├── postcss.config.js                      # PostCSS plugins for Tailwind CSS
+│   ├── tailwind.config.js                     # Tailwind UI theme, color palette, and extensions
+│   ├── tsconfig.json                          # TypeScript configuration for React JSX and Vite bundler
+│   ├── tsconfig.node.json                     # TypeScript config for Vite configuration files
+│   ├── vercel.json                            # Vercel SPA catch-all rewrite to /index.html
+│   ├── vite.config.ts                         # Vite configuration, dev proxy, and build settings
+│   │
+│   ├── public/                                # Public web assets
+│   │   ├── robots.txt                         # Search engine crawler policies
+│   │   └── sitemap.xml                        # XML sitemap for SEO discovery
+│   │
+│   └── src/                                   # Frontend source code
+│       ├── App.tsx                            # React Router v6 setup with React.lazy code splitting
+│       ├── index.css                          # Tailwind CSS imports and custom global styling
+│       ├── main.tsx                           # React DOM root bootstrap
+│       ├── vite-env.d.ts                      # Vite client environment typing
+│       │
+│       ├── components/                        # Modular React components
+│       │   ├── Footer.tsx                     # Global footer with navigation links
+│       │   ├── Navbar.tsx                     # Header with auth state, profile toggle, and logo
+│       │   ├── PropertyCard.tsx               # Reusable card for listing display with badges
+│       │   ├── ProtectedRoute.tsx             # Authentication guard redirecting unauthenticated users
+│       │   └── ViewingModal.tsx               # Modal dialogue for booking viewing appointments
+│       │
+│       ├── context/                           # Global state providers
+│       │   └── AuthContext.tsx                # JWT token persistence, user profile, and auth methods
+│       │
+│       ├── pages/                             # Lazy-loaded page views
+│       │   ├── CreateEditPropertyPage.tsx     # Property creation & editing form with image uploader
+│       │   ├── DashboardPage.tsx              # User dashboard managing owned listings & bookings
+│       │   ├── ForgotPasswordPage.tsx         # Password reset request form
+│       │   ├── HomePage.tsx                   # Landing page with hero banner and featured properties
+│       │   ├── LoginPage.tsx                  # User and admin sign-in form
+│       │   ├── NotFoundPage.tsx               # 404 error page with navigation fallbacks
+│       │   ├── PropertiesPage.tsx             # Search, filter, and pagination listings catalog
+│       │   ├── PropertyDetailPage.tsx         # Comprehensive property specs, photo gallery, contact
+│       │   ├── RegisterPage.tsx               # New user onboarding form
+│       │   └── ResetPasswordPage.tsx          # Password token reset confirmation form
+│       │
+│       ├── services/                          # API communication layer
+│       │   └── api.ts                         # Type-safe client wrapping all backend REST endpoints
+│       │
+│       ├── types/                             # Frontend TypeScript type declarations
+│       │   └── index.ts                       # Property, User, Appointment, and Filter interfaces
+│       │
+│       └── utils/                             # Utility helpers
+│           └── formatters.ts                  # Indian Rupee (INR ₹), Lakh/Crore, and date formatters
+│
+└── docs/                                      # Technical documentation & security audit ledgers
+    ├── adr.md                                 # Architecture Decision Records
+    ├── agent-progress.md                      # Development milestones and verification ledger
+    ├── ANTIGRAVITY_HIDDEN_FLAW_AUDIT.md       # Initial vulnerability identification report
+    ├── FINAL_INDEPENDENT_VERIFICATION_AUDIT.md# Formal audit report covering all 67 test verifications
+    ├── QA_CRITICAL_01_BOUNDARY_AUDIT.md       # Input validation and boundary test documentation
+    └── QA_CRITICAL_02_LIFECYCLE_AUDIT.md      # Upload lifecycle and orphan sweeper verification
 ```
 
-- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Lucide React icons, React Router DOM v6.
-- **Backend**: Express, TypeScript, Mongoose, JWT (`jsonwebtoken`), bcryptjs, Multer, Helmet, CORS, Express-Rate-Limit, Nodemailer.
-- **Database**: MongoDB (with local/in-memory test server support via `mongodb-memory-server`).
-- **Testing**: Vitest with in-memory MongoDB for fully reproducible, zero-setup automated test suites.
+---
+
+## 🔒 Security & Verification Highlights
+
+1. **Full Image Decoding & Decompression Defense**:
+   - Every uploaded image is verified via magic bytes (file signature) **and** decoded through `sharp` to inspect actual pixel dimensions and color channels.
+   - Enforces strict dimension constraints (max 4096×4096 px, max 16 Megapixels, max 5MB) to defend against memory exhaustion and decompression bomb attacks.
+2. **Atomic Multi-Image Upload Rollback**:
+   - If a failure occurs while processing or writing any file in a multi-image batch, previously written files are immediately rolled back and purged from storage.
+3. **Resilient Orphan Sweeper & In-Flight Grace Period**:
+   - The automated reconciliation worker (`reconcileDiskOrphans`) maintains a 1-hour grace window for newly uploaded files, ensuring legitimate users filling out forms are never disrupted while safely harvesting abandoned uploads.
+4. **Server-Enforced Authorization**:
+   - Property edits, deletions, and appointment cancellations strictly verify server-side ownership (`req.user.id === resource.owner`). Client-supplied owner fields are rejected.
+5. **Multi-Origin CORS Protection**:
+   - Dynamically checks origins against configured production hosts and matches trusted Vercel preview environments (`https://*.vercel.app`) without opening wildcards.
 
 ---
 
-## 2. Getting Started & Setup
+## 🛠️ API Reference Summary
 
-### Prerequisites
-- Node.js `v18+` (Tested on `v24.15.0`)
-- npm `v9+`
-- MongoDB instance (Local MongoDB, Docker, or MongoDB Atlas connection string)
+### System Health
+- `GET /api/health` — Returns database connectivity status, uptime, and service health.
 
-### Quick Start Installation
-
-```bash
-# 1. Install all dependencies across root, backend, and frontend
-npm install
-
-# 2. Seed database with realistic Indian property catalog (Mumbai, Bengaluru, Delhi NCR, Kolkata, etc.)
-npm run seed
-
-# 3. Start both backend and frontend development servers in separate terminals
-# Terminal 1 (Backend API on http://localhost:4000):
-npm run dev:backend
-
-# Terminal 2 (Frontend Client on http://localhost:5173):
-npm run dev:frontend
-```
-
----
-
-## 3. Environment Configuration
-
-### Backend (`backend/.env`)
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `NODE_ENV` | Environment mode (`development`, `production`, `test`) | `development` |
-| `PORT` | API server port | `4000` |
-| `MONGODB_URI` | MongoDB connection URI | `mongodb://localhost:27017/sapphireiq` |
-| `JWT_SECRET` | Secret key for signing authentication tokens | (Change in production) |
-| `APP_ORIGIN` | Allowed client origin for CORS | `http://localhost:5173` |
-| `SMTP_HOST` | *(Optional)* SMTP host for password reset emails | *Unset (simulated)* |
-| `SMTP_PORT` | *(Optional)* SMTP port | `587` |
-| `SMTP_USER` | *(Optional)* SMTP user credentials | *Unset* |
-| `SMTP_PASS` | *(Optional)* SMTP password | *Unset* |
-| `EMAIL_FROM` | Outgoing email address | `no-reply@sapphireiq.local` |
-| `IMAGEKIT_PUBLIC_KEY` | *(Optional)* ImageKit CDN public key | *Unset (falls back to local uploads)* |
-| `IMAGEKIT_PRIVATE_KEY`| *(Optional)* ImageKit private key | *Unset* |
-| `IMAGEKIT_URL_ENDPOINT`| *(Optional)* ImageKit URL endpoint | *Unset* |
-
-### Frontend (`frontend/.env`)
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `VITE_API_BASE_URL` | Base endpoint for backend API | `/api` |
-| `VITE_ENABLE_AI_HUB` | Feature flag for optional AI scraping/ranking | `false` |
-
----
-
-## 4. API Endpoints
-
-### Health & Monitoring
-- `GET /api/health` - Safe readiness probe checking database connectivity and service uptime.
-
-### Authentication (`/api/auth` & `/api/users`)
-- `POST /api/auth/register` - Create account (`name`, `email`, `password`, `phone`).
-- `POST /api/auth/login` - Authenticate and receive JWT token.
-- `GET /api/auth/me` & `GET /api/users/me` - Retrieve current authenticated profile (Requires Bearer token).
-- `POST /api/auth/forgot-password` - Request password reset token.
-- `POST /api/auth/reset-password` - Reset password with token.
+### Authentication (`/api/auth`)
+- `POST /api/auth/register` — Creates user account with bcrypt password hashing.
+- `POST /api/auth/login` — Authenticates credentials and issues signed JWT.
+- `GET /api/auth/me` — Fetches current user profile from bearer token.
+- `POST /api/auth/forgot-password` — Dispatches password reset tokens.
+- `POST /api/auth/reset-password` — Validates reset token and updates password.
 
 ### Properties (`/api/properties`)
-- `GET /api/properties` - List published properties with query filters (`city`, `propertyType`, `listingType`, `minPrice`, `maxPrice`, `bedrooms`, `search`, `sort`, `page`, `limit`).
-- `GET /api/properties/:id` - Fetch single property details.
-- `POST /api/properties` - Create new listing (Requires Bearer token; `owner` derived from auth).
-- `PATCH /api/properties/:id` - Edit listing (Enforces server-side ownership: only owner or admin).
-- `DELETE /api/properties/:id` - Delete listing (Enforces server-side ownership: only owner or admin).
-- `POST /api/properties/upload-images` - Upload up to 4 images (Multipart form-data, max 5MB/image).
-- `GET /api/properties/user/mine` - Fetch listings created by the current authenticated user.
+- `GET /api/properties` — Paginated catalog with multi-field filtering (`city`, `propertyType`, `listingType`, `price`, `bedrooms`).
+- `GET /api/properties/:id` — Retrieves comprehensive property details.
+- `POST /api/properties` — Creates new property listing (Authenticated).
+- `PATCH /api/properties/:id` — Modifies listing (Owner/Admin restricted).
+- `DELETE /api/properties/:id` — Deletes listing (Owner/Admin restricted).
+- `POST /api/properties/upload-images` — Multipart upload (Max 4 images, 5MB each, validated with Sharp).
+- `GET /api/properties/user/mine` — Retrieves all listings owned by current user.
 
-### Viewing Appointments (`/api/appointments`)
-- `POST /api/appointments/guest` - Public, rate-limited appointment booking for guests.
-- `POST /api/appointments` - Authenticated appointment booking.
-- `GET /api/appointments/mine` - View appointments booked by user or for properties owned by user.
-- `PATCH /api/appointments/:id/cancel` - Cancel viewing appointment (Requires booker/owner authorization).
-
----
-
-## 5. Security & Verification Record
-
-- **Server-Side Authorization**: Property and appointment modifications strictly verify `req.user.id === resource.owner` on the server before mutating records. Client-provided owners are rejected.
-- **HTTP Hardening**: Configured with `helmet`, strict CORS allowlisting, and request size boundaries.
-- **Rate Limiting**: Protects sensitive authentication routes and public booking endpoints from brute force and denial of service.
-- **Automated Tests**: Comprehensive integration test suite using Vitest and `mongodb-memory-server` testing all critical flows (health, auth, ownership attacks, bookings). Run tests using `npm test`.
+### Appointments (`/api/appointments`)
+- `POST /api/appointments/guest` — Rate-limited public viewing booking.
+- `POST /api/appointments` — Authenticated appointment reservation.
+- `GET /api/appointments/mine` — Lists user bookings and owner requests.
+- `PATCH /api/appointments/:id/cancel` — Cancels appointment (Booker/Owner authorized).
 
 ---
 
-## 6. Deployment Guide (Render Backend & Vercel Frontend)
+## 💻 Local Development Setup
 
-### Step 1: Push to GitHub
+### 1. Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+- **MongoDB**: Local MongoDB instance or MongoDB Atlas URI
 
-Initialize the repository, commit all tracked files, and push to your GitHub account:
-
+### 2. Installation
 ```bash
-git init
-git add .
-git commit -m "feat: complete SapphireIQ full-stack real estate platform"
-git branch -M main
-git remote add origin https://github.com/unknown404-practice/sapphireiq-real-estate-platform.git
-git push -u origin main
+# Clone the repository
+git clone https://github.com/unknown404-practice/sapphireiq-real-estate-platform.git
+cd sapphireiq-real-estate-platform
+
+# Install root, backend, and frontend dependencies
+npm install
 ```
 
-*(Note: `.env`, `node_modules/`, `dist/`, and local uploads are ignored by `.gitignore` to ensure zero credentials or build artifacts are pushed).*
+### 3. Environment Setup
+Configure `backend/.env` and `frontend/.env` based on their respective `.env.example` files:
+
+```bash
+# Backend (.env)
+PORT=4000
+MONGODB_URI=mongodb://localhost:27017/sapphireiq
+JWT_SECRET=your_super_secret_jwt_key_at_least_32_characters_long
+APP_ORIGIN=http://localhost:5173
+
+# Frontend (.env)
+VITE_API_BASE_URL=http://localhost:4000/api
+```
+
+### 4. Seed Database & Run
+```bash
+# Seed database with sample Indian properties & demo users
+npm run seed
+
+# Run both backend and frontend development servers concurrently
+npm run dev:backend   # Runs on http://localhost:4000
+npm run dev:frontend  # Runs on http://localhost:5173
+```
+
+### 5. Running Automated Tests
+```bash
+npm run test
+```
+*Executes all 67 integration tests across 5 test suites using Vitest and MongoDB Memory Server.*
 
 ---
 
-### Step 2: Deploy Backend to Render
+## 👤 Author & Maintainer Credentials
 
-1. Log in to [Render](https://dashboard.render.com/) and click **New +** -> **Web Service** (or use **Blueprint** with the included `render.yaml`).
-2. Connect your GitHub repository: `unknown404-practice/sapphireiq-real-estate-platform`.
-3. If creating manually via Web Service:
-   - **Name**: `sapphireiq-backend`
-   - **Root Directory**: `backend`
-   - **Environment**: `Node`
-   - **Build Command**: `npm install && npm run build`
-   - **Start Command**: `npm run start`
-   - **Health Check Path**: `/api/health`
-4. In the **Environment Variables** tab, add:
-   - `NODE_ENV`: `production`
-   - `PORT`: `10000` (Render sets this automatically)
-   - `MONGODB_URI`: `<YOUR_MONGODB_ATLAS_CONNECTION_STRING>`
-   - `JWT_SECRET`: `<STRONG_RANDOM_SECRET_AT_LEAST_32_CHARS>`
-   - `APP_ORIGIN`: `https://<YOUR_VERCEL_FRONTEND_DOMAIN>.vercel.app`
-   - *(Optional for cloud media)*: `IMAGEKIT_PUBLIC_KEY`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT`
-5. Click **Deploy Web Service**. Once deployed, copy your backend URL (e.g. `https://sapphireiq-backend.onrender.com`).
-
----
-
-### Step 3: Deploy Frontend to Vercel
-
-1. Log in to [Vercel](https://vercel.com/) and click **Add New...** -> **Project**.
-2. Import your GitHub repository: `unknown404-practice/sapphireiq-real-estate-platform`.
-3. In project configuration:
-   - **Framework Preset**: `Vite`
-   - **Root Directory**: `frontend` (or leave as root; both root and frontend include pre-configured `vercel.json` rewrite files for single-page client routing)
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-4. In the **Environment Variables** section, add:
-   - `VITE_API_BASE_URL`: `https://<YOUR_RENDER_BACKEND_NAME>.onrender.com/api`
-   - `VITE_ENABLE_AI_HUB`: `false`
-5. Click **Deploy**. Vercel will build and assign your production domain (e.g. `https://sapphireiq.vercel.app`).
-
----
-
-### Step 4: Final Connection & CORS Alignment
-
-1. Return to the Render dashboard for your backend service.
-2. In **Environment Variables**, verify `APP_ORIGIN` matches your assigned Vercel URL (e.g. `https://sapphireiq.vercel.app`).
-3. Render will redeploy with the updated CORS configuration, enabling secure communication between frontend and backend.
-4. Verify by visiting `https://<YOUR_VERCEL_FRONTEND_DOMAIN>.vercel.app` in your browser.
-
----
-
-## 7. Author & Contact
-
-**Ranadeep Saha**
-- **Gmail:** [ranadeep2021saha@gmail.com](mailto:ranadeep2021saha@gmail.com)
+- **Lead Engineer & Author:** Ranadeep Saha
+- **Email:** [ranadeep2021saha@gmail.com](mailto:ranadeep2021saha@gmail.com)
 - **LinkedIn:** [www.linkedin.com/in/ranadeep-saha-a03296404](https://www.linkedin.com/in/ranadeep-saha-a03296404)
-- **GitHub:** [unknown404-practice](https://github.com/unknown404-practice)
-
+- **GitHub:** [@unknown404-practice](https://github.com/unknown404-practice)
