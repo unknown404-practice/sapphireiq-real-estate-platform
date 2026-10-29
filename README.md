@@ -144,7 +144,7 @@ git init
 git add .
 git commit -m "feat: complete SapphireIQ full-stack real estate platform"
 git branch -M main
-git remote add origin https://github.com/<YOUR_GITHUB_USERNAME>/<YOUR_REPOSITORY_NAME>.git
+git remote add origin https://github.com/unknown404-practice/sapphireiq-real-estate-platform.git
 git push -u origin main
 ```
 
@@ -155,7 +155,7 @@ git push -u origin main
 ### Step 2: Deploy Backend to Render
 
 1. Log in to [Render](https://dashboard.render.com/) and click **New +** -> **Web Service** (or use **Blueprint** with the included `render.yaml`).
-2. Connect your GitHub repository.
+2. Connect your GitHub repository: `unknown404-practice/sapphireiq-real-estate-platform`.
 3. If creating manually via Web Service:
    - **Name**: `sapphireiq-backend`
    - **Root Directory**: `backend`
@@ -177,7 +177,7 @@ git push -u origin main
 ### Step 3: Deploy Frontend to Vercel
 
 1. Log in to [Vercel](https://vercel.com/) and click **Add New...** -> **Project**.
-2. Import your GitHub repository.
+2. Import your GitHub repository: `unknown404-practice/sapphireiq-real-estate-platform`.
 3. In project configuration:
    - **Framework Preset**: `Vite`
    - **Root Directory**: `frontend` (or leave as root; both root and frontend include pre-configured `vercel.json` rewrite files for single-page client routing)
@@ -196,3 +196,13 @@ git push -u origin main
 2. In **Environment Variables**, verify `APP_ORIGIN` matches your assigned Vercel URL (e.g. `https://sapphireiq.vercel.app`).
 3. Render will redeploy with the updated CORS configuration, enabling secure communication between frontend and backend.
 4. Verify by visiting `https://<YOUR_VERCEL_FRONTEND_DOMAIN>.vercel.app` in your browser.
+
+---
+
+## 7. Author & Contact
+
+**Ranadeep Saha**
+- **Gmail:** [ranadeep2021saha@gmail.com](mailto:ranadeep2021saha@gmail.com)
+- **LinkedIn:** [www.linkedin.com/in/ranadeep-saha-a03296404](https://www.linkedin.com/in/ranadeep-saha-a03296404)
+- **GitHub:** [unknown404-practice](https://github.com/unknown404-practice)
+
