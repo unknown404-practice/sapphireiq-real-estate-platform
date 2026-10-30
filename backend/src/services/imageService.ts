@@ -2,7 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import ImageKit from 'imagekit';
+import ImageKit, { toFile } from '@imagekit/nodejs';
 import sharp, { Metadata } from 'sharp';
 import { env } from '../config/env';
 import { IPropertyImage } from '../types';
@@ -36,11 +36,9 @@ export const upload = multer({
 
 // ImageKit client initialization if credentials are provided
 let imageKitClient: ImageKit | null = null;
-if (env.IMAGEKIT_PUBLIC_KEY && env.IMAGEKIT_PRIVATE_KEY && env.IMAGEKIT_URL_ENDPOINT) {
+if (env.IMAGEKIT_PRIVATE_KEY) {
   imageKitClient = new ImageKit({
-    publicKey: env.IMAGEKIT_PUBLIC_KEY,
     privateKey: env.IMAGEKIT_PRIVATE_KEY,
-    urlEndpoint: env.IMAGEKIT_URL_ENDPOINT,
   });
 }
 
@@ -228,17 +226,19 @@ export async function processAndUploadImage(
   // Fully decode, validate raster, strip metadata, and re-encode
   const processed = await decodeAndSanitizeImage(file.buffer, file.mimetype);
 
-  // If ImageKit configured, upload sanitized buffer
+  // If ImageKit configured, upload sanitized buffer via modern @imagekit/nodejs SDK
   if (imageKitClient) {
     try {
-      const response = await imageKitClient.upload({
-        file: processed.buffer,
-        fileName: `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`,
+      const fileName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const uploadable = await toFile(processed.buffer, fileName, { type: processed.mimeType });
+      const response = await imageKitClient.files.upload({
+        file: uploadable,
+        fileName,
         folder: '/sapphireiq/properties',
       });
       return {
-        url: response.url,
-        fileId: response.fileId,
+        url: response.url || '',
+        fileId: response.fileId || '',
         caption: file.originalname,
       };
     } catch (err: any) {
@@ -280,7 +280,7 @@ export async function deleteImage(image: IPropertyImage): Promise<void> {
   // If remote ImageKit fileId exists and client is initialized
   if (imageKitClient && image.fileId && (!image.url || !image.url.startsWith('/uploads/'))) {
     try {
-      await imageKitClient.deleteFile(image.fileId);
+      await imageKitClient.files.delete(image.fileId);
     } catch (err: any) {
       console.error('[ImageService] CRITICAL: Failed to delete remote ImageKit file:', err.message);
       throw err;
@@ -395,7 +395,7 @@ export async function retryOrphanedUploadCleanups(): Promise<{
           throw new Error('Invalid remote storage file identifier format');
         }
         if (imageKitClient) {
-          await imageKitClient.deleteFile(orphan.fileId);
+          await imageKitClient.files.delete(orphan.fileId);
         }
       } else {
         throw new Error('Invalid orphan record: missing valid url or fileId');
