@@ -6,12 +6,13 @@ import { env } from '../config/env';
 import { AuthenticatedRequest, AuthUserPayload } from '../types';
 import { sendPasswordResetEmail } from '../services/emailService';
 
-function generateToken(user: { _id: any; email: string; role: string; name: string }): string {
+function generateToken(user: { _id: any; email: string; role: string; name: string; tokenVersion?: number }): string {
   const payload: AuthUserPayload = {
     id: user._id.toString(),
     email: user.email,
     role: user.role as any,
     name: user.name,
+    tokenVersion: user.tokenVersion || 0,
   };
 
   return jwt.sign(payload, env.JWT_SECRET, {
@@ -268,7 +269,44 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     await user.save();
 
-    const resetUrl = `${env.APP_ORIGIN}/reset-password/${resetToken}`;
+    const originHeader = req.headers.origin || req.headers.referer;
+    const origins = env.APP_ORIGIN
+      ? env.APP_ORIGIN.split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean)
+      : [];
+    const fallbackOrigin = origins[0] || 'http://localhost:5173';
+
+    let clientOrigin = '';
+    if (originHeader) {
+      try {
+        const parsed = new URL(String(originHeader));
+        const candidate = `${parsed.protocol}//${parsed.host}`;
+        const isAllowed = origins.includes(candidate) || candidate === 'http://localhost:5173' || candidate === 'http://127.0.0.1:5173';
+        const vercelPrefixes = origins
+          .filter((ao) => ao.includes('.vercel.app'))
+          .flatMap((ao) => {
+            const host = ao.replace(/^https?:\/\//, '').replace(/\.vercel\.app$/, '');
+            return [host, host.split('-')[0]];
+          })
+          .filter(Boolean);
+        const isVercel =
+          vercelPrefixes.length > 0 &&
+          vercelPrefixes.some((prefix) =>
+            new RegExp(`^https:\\/\\/${prefix}(-[a-zA-Z0-9_-]+)?\\.vercel\\.app$`).test(candidate)
+          );
+
+        if (isAllowed || isVercel) {
+          clientOrigin = candidate;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    if (!clientOrigin) {
+      clientOrigin = fallbackOrigin;
+    }
+
+    const resetUrl = `${clientOrigin.replace(/\/+$/, '')}/reset-password/${resetToken}`;
 
     const emailResult = await sendPasswordResetEmail({
       to: user.email,
@@ -325,6 +363,7 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     user.password = password;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     res.status(200).json({

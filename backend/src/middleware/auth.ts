@@ -2,12 +2,13 @@ import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { AuthenticatedRequest, AuthUserPayload } from '../types';
+import { User } from '../models/User';
 
-export function authenticate(
+export async function authenticate(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -22,6 +23,11 @@ export function authenticate(
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as AuthUserPayload;
+    const userDoc = await User.findById(decoded.id).select('tokenVersion');
+    if (!userDoc || (userDoc.tokenVersion || 0) !== (decoded.tokenVersion || 0)) {
+      res.status(401).json({ success: false, error: 'Token has been revoked. Please log in again.' });
+      return;
+    }
     req.user = decoded;
     next();
   } catch (err: any) {

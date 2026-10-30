@@ -194,6 +194,35 @@ describe('Viewing Appointments and Privacy Controls', () => {
     expect(secondRes.body.error).toContain('already have an active viewing appointment');
   });
 
+  it('prevents TOCTOU race conditions under simultaneous concurrent booking requests', async () => {
+    const futureDate = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Fire 2 concurrent guest viewing requests with the exact same email and property
+    const [res1, res2] = await Promise.all([
+      request(app)
+        .post('/api/appointments/guest')
+        .send({
+          property: propertyId,
+          guestName: 'Concurrent Tester',
+          guestEmail: 'concurrent@example.com',
+          guestPhone: '+91 9123456780',
+          scheduledAt: futureDate,
+        }),
+      request(app)
+        .post('/api/appointments/guest')
+        .send({
+          property: propertyId,
+          guestName: 'Concurrent Tester',
+          guestEmail: 'concurrent@example.com',
+          guestPhone: '+91 9123456780',
+          scheduledAt: futureDate,
+        }),
+    ]);
+
+    const statuses = [res1.status, res2.status].sort();
+    expect(statuses).toEqual([201, 409]);
+  });
+
   it('allows property owner to confirm appointment and rejects unauthorized status change', async () => {
     const futureDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 

@@ -108,14 +108,16 @@ export async function getProperties(req: Request, res: Response, next: NextFunct
       query.featured = true;
     }
 
-    // Text search in title, locality, description (bounded length)
+    // Text search using full-text index (bounded length)
     if (typeof search === 'string' && search.trim()) {
-      const sanitized = search.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.$or = [
-        { title: { $regex: new RegExp(sanitized, 'i') } },
-        { locality: { $regex: new RegExp(sanitized, 'i') } },
-        { city: { $regex: new RegExp(sanitized, 'i') } },
-      ];
+      let sanitized = search.trim().slice(0, 100);
+      const quoteCount = (sanitized.match(/"/g) || []).length;
+      if (quoteCount % 2 !== 0) {
+        sanitized = sanitized.replace(/"/g, ' ').trim();
+      }
+      if (sanitized) {
+        query.$text = { $search: sanitized };
+      }
     }
 
     // Allowlisted sorting
@@ -566,13 +568,27 @@ export async function updateProperty(req: AuthenticatedRequest, res: Response, n
       return;
     }
 
-    if (Array.isArray(updates.images) && updates.images.length > 4) {
-      res.status(400).json({ success: false, error: 'Maximum 4 images allowed per property' });
-      return;
+    let removedImages: any[] = [];
+    if (Array.isArray(updates.images)) {
+      if (updates.images.length > 4) {
+        res.status(400).json({ success: false, error: 'Maximum 4 images allowed per property' });
+        return;
+      }
+
+      // Detect removed images to purge after successful save
+      const newUrls = new Set(updates.images.map((img: any) => img.url));
+      removedImages = property.images.filter((oldImg) => oldImg && !newUrls.has(oldImg.url));
     }
 
     Object.assign(property, updates);
     await property.save();
+
+    // Clean up removed image files from storage/CDN after save confirmation
+    for (const removedImg of removedImages) {
+      deleteImage(removedImg as any).catch((err) => {
+        console.error('[PropertyUpdate] Failed to delete removed image file:', err.message);
+      });
+    }
 
     res.status(200).json({
       success: true,

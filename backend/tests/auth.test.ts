@@ -113,7 +113,14 @@ describe('Authentication API', () => {
   });
 
   it('safe forgot-password and reset-password flow', async () => {
-    await request(app).post('/api/auth/register').send(testUser);
+    const regRes = await request(app).post('/api/auth/register').send(testUser);
+    const initialToken = regRes.body.token;
+
+    // Verify initial token works prior to password reset
+    const preResetCheck = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${initialToken}`);
+    expect(preResetCheck.status).toBe(200);
 
     const forgotRes = await request(app)
       .post('/api/auth/forgot-password')
@@ -135,12 +142,25 @@ describe('Authentication API', () => {
     expect(resetRes.status).toBe(200);
     expect(resetRes.body.success).toBe(true);
 
+    // Verify initial token is now REVOKED (tokenVersion mismatch)
+    const postResetCheck = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${initialToken}`);
+    expect(postResetCheck.status).toBe(401);
+    expect(postResetCheck.body.error).toContain('revoked');
+
     // Verify login with new password works
     const loginRes = await request(app).post('/api/auth/login').send({
       email: testUser.email,
       password: 'BrandNewPassword123!',
     });
     expect(loginRes.status).toBe(200);
+
+    // Verify new token works
+    const newMeCheck = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${loginRes.body.token}`);
+    expect(newMeCheck.status).toBe(200);
 
     // Verify reset token cannot be reused
     const reuseRes = await request(app).post('/api/auth/reset-password').send({

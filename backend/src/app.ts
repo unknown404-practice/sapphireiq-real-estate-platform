@@ -35,10 +35,20 @@ export function createApp(): Application {
 
         const normalizedOrigin = origin.replace(/\/+$/, '');
         const isExplicitlyAllowed = allowedOrigins.includes(normalizedOrigin);
-        // Automatically support Vercel preview domains if a vercel.app domain is configured in APP_ORIGIN
+        // Automatically support Vercel preview deployments that match the specific project prefix
+        const vercelPrefixes = allowedOrigins
+          .filter((ao) => ao.includes('.vercel.app'))
+          .flatMap((ao) => {
+            const host = ao.replace(/^https?:\/\//, '').replace(/\.vercel\.app$/, '');
+            return [host, host.split('-')[0]];
+          })
+          .filter(Boolean);
+
         const isVercelDomain =
-          allowedOrigins.some((ao) => ao.includes('.vercel.app')) &&
-          /^https:\/\/[a-zA-Z0-9_-]+\.vercel\.app$/.test(normalizedOrigin);
+          vercelPrefixes.length > 0 &&
+          vercelPrefixes.some((prefix) =>
+            new RegExp(`^https:\\/\\/${prefix}(-[a-zA-Z0-9_-]+)?\\.vercel\\.app$`).test(normalizedOrigin)
+          );
 
         if (isExplicitlyAllowed || isVercelDomain) {
           callback(null, true);

@@ -34,7 +34,7 @@ beforeAll(async () => {
     console.error('Failed to initialize in-memory MongoDB:', err);
     throw err;
   }
-}, 60000);
+}, 180000);
 
 afterAll(async () => {
   if (mongoose.connection.readyState !== 0) {

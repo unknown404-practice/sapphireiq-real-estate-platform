@@ -115,5 +115,9 @@ const PropertySchema = new Schema<IPropertyDocument>(
 PropertySchema.index({ status: 1, city: 1, listingType: 1, price: 1 });
 PropertySchema.index({ status: 1, propertyType: 1 });
 PropertySchema.index({ owner: 1, status: 1 });
+PropertySchema.index(
+  { title: 'text', description: 'text', locality: 'text', city: 'text' },
+  { weights: { title: 10, locality: 5, city: 3, description: 1 } }
+);
 
 export const Property = mongoose.model<IPropertyDocument>('Property', PropertySchema);

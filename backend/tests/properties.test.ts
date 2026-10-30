@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
+import fs from 'fs';
+import path from 'path';
 import { createApp } from '../src/app';
 import { Property } from '../src/models/Property';
 
@@ -369,5 +371,73 @@ describe('Properties Domain and Ownership Security', () => {
       .send({ title: '   ' });
     expect(emptyTitleRes.status).toBe(400);
     expect(emptyTitleRes.body.error).toContain('Title cannot be empty');
+  });
+
+  it('purges removed images from disk when property images are updated', async () => {
+    const uploadsDir = path.resolve(__dirname, '../uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Create 2 dummy files on disk to simulate existing uploaded images
+    const file1 = `test-purge-1-${Date.now()}.jpg`;
+    const file2 = `test-purge-2-${Date.now()}.jpg`;
+    const path1 = path.join(uploadsDir, file1);
+    const path2 = path.join(uploadsDir, file2);
+
+    fs.writeFileSync(path1, 'dummy data 1');
+    fs.writeFileSync(path2, 'dummy data 2');
+
+    // Create property with both images
+    const createRes = await request(app)
+      .post('/api/properties')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        title: 'Image Purge Test Property',
+        description: 'Testing image diffing on update',
+        propertyType: 'apartment',
+        listingType: 'sale',
+        price: 7500000,
+        city: 'Pune',
+        state: 'Maharashtra',
+        images: [
+          { url: `/uploads/${file1}`, fileId: file1 },
+          { url: `/uploads/${file2}`, fileId: file2 },
+        ],
+      });
+
+    expect(createRes.status).toBe(201);
+    const propId = createRes.body.data._id;
+
+    // Update property keeping only file2 (file1 removed)
+    const updateRes = await request(app)
+      .patch(`/api/properties/${propId}`)
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({
+        images: [{ url: `/uploads/${file2}`, fileId: file2 }],
+      });
+
+    expect(updateRes.status).toBe(200);
+
+    // Wait 100ms for async deleteImage promise to settle
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // file1 should be removed from disk, file2 should still exist
+    expect(fs.existsSync(path1)).toBe(false);
+    expect(fs.existsSync(path2)).toBe(true);
+
+    // Cleanup file2
+    if (fs.existsSync(path2)) fs.unlinkSync(path2);
+  });
+
+  it('handles search queries with uneven quotes safely without phrase syntax errors', async () => {
+    // Search with uneven quotes e.g. 3" pipe or penthouse"
+    const searchRes = await request(app)
+      .get('/api/properties')
+      .query({ search: 'luxury penthouse"' });
+
+    expect(searchRes.status).toBe(200);
+    expect(searchRes.body.success).toBe(true);
+    expect(Array.isArray(searchRes.body.data)).toBe(true);
   });
 });

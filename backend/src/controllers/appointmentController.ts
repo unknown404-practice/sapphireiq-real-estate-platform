@@ -137,20 +137,32 @@ export async function createGuestAppointment(req: Request, res: Response, next: 
         ? property.images[0].url
         : undefined;
 
-    const appointment = await Appointment.create({
-      property: property._id,
-      guestName: guestName.trim(),
-      guestEmail: guestEmail.trim().toLowerCase(),
-      guestPhone: guestPhone.trim(),
-      scheduledAt: scheduledDate,
-      status: 'pending',
-      notes: notes ? notes.trim() : undefined,
-      propertyTitle: property.title,
-      propertyCity: property.city,
-      propertyThumbnail: thumbnail,
-      propertyPrice: property.price,
-      propertyOwner: (property.owner as any)?._id || property.owner,
-    });
+    let appointment;
+    try {
+      appointment = await Appointment.create({
+        property: property._id,
+        guestName: guestName.trim(),
+        guestEmail: guestEmail.trim().toLowerCase(),
+        guestPhone: guestPhone.trim(),
+        scheduledAt: scheduledDate,
+        status: 'pending',
+        notes: notes ? notes.trim() : undefined,
+        propertyTitle: property.title,
+        propertyCity: property.city,
+        propertyThumbnail: thumbnail,
+        propertyPrice: property.price,
+        propertyOwner: (property.owner as any)?._id || property.owner,
+      });
+    } catch (createErr: any) {
+      if (createErr.code === 11000) {
+        res.status(409).json({
+          success: false,
+          error: 'A viewing request for this property with this email address is already pending.',
+        });
+        return;
+      }
+      throw createErr;
+    }
 
     res.status(201).json({
       success: true,
@@ -266,21 +278,33 @@ export async function createAuthenticatedAppointment(
         ? property.images[0].url
         : undefined;
 
-    const appointment = await Appointment.create({
-      property: property._id,
-      user: req.user.id,
-      guestName: req.user.name,
-      guestEmail: req.user.email,
-      guestPhone: phone ? phone.trim() : undefined,
-      scheduledAt: scheduledDate,
-      status: 'pending',
-      notes: notes ? notes.trim() : undefined,
-      propertyTitle: property.title,
-      propertyCity: property.city,
-      propertyThumbnail: thumbnail,
-      propertyPrice: property.price,
-      propertyOwner: property.owner,
-    });
+    let appointment;
+    try {
+      appointment = await Appointment.create({
+        property: property._id,
+        user: req.user.id,
+        guestName: req.user.name,
+        guestEmail: req.user.email,
+        guestPhone: phone ? phone.trim() : undefined,
+        scheduledAt: scheduledDate,
+        status: 'pending',
+        notes: notes ? notes.trim() : undefined,
+        propertyTitle: property.title,
+        propertyCity: property.city,
+        propertyThumbnail: thumbnail,
+        propertyPrice: property.price,
+        propertyOwner: property.owner,
+      });
+    } catch (createErr: any) {
+      if (createErr.code === 11000) {
+        res.status(409).json({
+          success: false,
+          error: 'You already have an active viewing appointment requested for this property.',
+        });
+        return;
+      }
+      throw createErr;
+    }
 
     res.status(201).json({
       success: true,

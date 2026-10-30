@@ -37,6 +37,10 @@ const UserSchema = new Schema<IUserDocument>(
       type: String,
       trim: true,
     },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
     resetPasswordToken: {
       type: String,
       select: false,

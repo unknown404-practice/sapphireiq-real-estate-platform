@@ -9,4 +9,4 @@ Disallow: /register
 Disallow: /forgot-password
 Disallow: /reset-password
 
-Sitemap: https://sapphireiq.example.com/sitemap.xml
+Sitemap: https://sapphireiq-platform.vercel.app/sitemap.xml

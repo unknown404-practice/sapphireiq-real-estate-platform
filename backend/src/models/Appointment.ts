@@ -74,4 +74,15 @@ AppointmentSchema.index({ property: 1, scheduledAt: -1 });
 AppointmentSchema.index({ propertyOwner: 1, scheduledAt: -1 });
 AppointmentSchema.index({ guestEmail: 1, scheduledAt: -1 });
 
+// Partial unique compound indexes to prevent TOCTOU race conditions on pending bookings
+AppointmentSchema.index(
+  { property: 1, user: 1 },
+  { unique: true, partialFilterExpression: { status: 'pending', user: { $exists: true } } }
+);
+
+AppointmentSchema.index(
+  { property: 1, guestEmail: 1 },
+  { unique: true, partialFilterExpression: { status: 'pending', guestEmail: { $exists: true } } }
+);
+
 export const Appointment = mongoose.model<IAppointmentDocument>('Appointment', AppointmentSchema);

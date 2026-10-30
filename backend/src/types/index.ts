@@ -9,6 +9,7 @@ export interface IUser {
   password?: string;
   role: UserRole;
   phone?: string;
+  tokenVersion?: number;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
   createdAt?: Date;
@@ -85,6 +86,7 @@ export interface AuthUserPayload {
   email: string;
   role: UserRole;
   name: string;
+  tokenVersion?: number;
 }
 
 export interface AuthenticatedRequest extends Request {

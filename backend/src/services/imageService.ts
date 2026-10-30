@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import ImageKit from 'imagekit';
 import sharp, { Metadata } from 'sharp';
 import { env } from '../config/env';
@@ -246,7 +247,8 @@ export async function processAndUploadImage(
   }
 
   // Local storage fallback with verified extension and sanitized buffer
-  const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${processed.extension}`;
+  const safeRandomId = crypto.randomBytes(8).toString('hex');
+  const filename = `${Date.now()}-${safeRandomId}${processed.extension}`;
   const filepath = path.join(uploadsDir, filename);
   await fs.promises.writeFile(filepath, processed.buffer);
 

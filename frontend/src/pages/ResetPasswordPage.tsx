@@ -1,11 +1,21 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { Lock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 export const ResetPasswordPage: React.FC = () => {
-  const { token } = useParams<{ token: string }>();
+  const { token: paramToken } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
+  const queryToken = searchParams.get('token');
+
+  const [token, setToken] = useState(paramToken || queryToken || '');
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!token && (paramToken || queryToken)) {
+      setToken(paramToken || queryToken || '');
+    }
+  }, [paramToken, queryToken]);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -17,6 +27,12 @@ export const ResetPasswordPage: React.FC = () => {
     e.preventDefault();
     setError(null);
 
+    const activeToken = token.trim();
+    if (!activeToken) {
+      setError('Please provide a valid password reset token');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -27,15 +43,10 @@ export const ResetPasswordPage: React.FC = () => {
       return;
     }
 
-    if (!token) {
-      setError('Invalid password reset token in URL');
-      return;
-    }
-
     setLoading(true);
 
     try {
-      const res = await api.auth.resetPassword(token, password);
+      const res = await api.auth.resetPassword(activeToken, password);
       if (res.success) {
         setSuccess(true);
       } else {
@@ -83,6 +94,20 @@ export const ResetPasswordPage: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!paramToken && !queryToken && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Reset Token *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Paste your 64-character reset token"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-sapphire-500 focus:border-sapphire-500 font-mono"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
               <input

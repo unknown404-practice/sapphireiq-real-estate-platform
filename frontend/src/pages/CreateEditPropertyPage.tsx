@@ -76,14 +76,14 @@ export const CreateEditPropertyPage: React.FC = () => {
           setDescription(p.description);
           setPropertyType(p.propertyType);
           setListingType(p.listingType);
-          setPrice(String(p.price));
+          setPrice(p.price !== undefined && p.price !== null ? String(p.price) : '');
           setCity(p.city);
           setState(p.state);
           setLocality(p.locality || '');
           setPincode(p.pincode || '');
-          setBedrooms(p.bedrooms !== undefined ? String(p.bedrooms) : '');
-          setBathrooms(p.bathrooms !== undefined ? String(p.bathrooms) : '');
-          setAreaSqFt(p.areaSqFt !== undefined ? String(p.areaSqFt) : '');
+          setBedrooms(p.bedrooms !== undefined && p.bedrooms !== null ? String(p.bedrooms) : '');
+          setBathrooms(p.bathrooms !== undefined && p.bathrooms !== null ? String(p.bathrooms) : '');
+          setAreaSqFt(p.areaSqFt !== undefined && p.areaSqFt !== null ? String(p.areaSqFt) : '');
           setAmenities(p.amenities || []);
           setImages(p.images || []);
         } else {
@@ -156,9 +156,10 @@ export const CreateEditPropertyPage: React.FC = () => {
       return;
     }
 
-    const numericPrice = parseFloat(price);
+    const cleanPriceStr = String(price).replace(/,/g, '').trim();
+    const numericPrice = parseFloat(cleanPriceStr);
     if (isNaN(numericPrice) || numericPrice < 0) {
-      setError('Please enter a valid price in INR.');
+      setError('Please enter a valid non-negative price in INR.');
       return;
     }
 
@@ -172,9 +173,9 @@ export const CreateEditPropertyPage: React.FC = () => {
       state,
       locality: locality || undefined,
       pincode: pincode || undefined,
-      bedrooms: bedrooms ? parseInt(bedrooms, 10) : undefined,
-      bathrooms: bathrooms ? parseInt(bathrooms, 10) : undefined,
-      areaSqFt: areaSqFt ? parseFloat(areaSqFt) : undefined,
+      bedrooms: bedrooms !== '' && !isNaN(Number(bedrooms)) ? Math.max(0, parseInt(bedrooms, 10)) : undefined,
+      bathrooms: bathrooms !== '' && !isNaN(Number(bathrooms)) ? Math.max(0, parseInt(bathrooms, 10)) : undefined,
+      areaSqFt: areaSqFt !== '' && !isNaN(Number(areaSqFt)) ? Math.max(0, parseFloat(areaSqFt)) : undefined,
       amenities,
       images,
     };

@@ -5,6 +5,11 @@ import { Appointment } from '../models/Appointment';
 import { connectDatabase, disconnectDatabase } from '../config/database';
 
 export async function seedDatabase(): Promise<void> {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
+    console.error('[Fatal Seed Error] Refusing to seed database in production mode without ALLOW_PROD_SEED=true.');
+    process.exit(1);
+  }
+
   try {
     await connectDatabase();
     console.log('[Seed] Connected to database. Purging existing test records...');

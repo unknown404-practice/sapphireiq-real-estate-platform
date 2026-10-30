@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import { env, isProduction } from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
+import { retryOrphanedUploadCleanups } from './services/imageService';
 
 async function startServer(): Promise<void> {
   try {
@@ -13,6 +14,22 @@ async function startServer(): Promise<void> {
 
     // Connect to Database
     await connectDatabase();
+
+    // Run automated orphan sweeper every 6 hours in non-test mode
+    if (process.env.NODE_ENV !== 'test') {
+      const SWEEPER_INTERVAL_MS = 6 * 60 * 60 * 1000;
+      const sweeperTimer = setInterval(async () => {
+        try {
+          const result = await retryOrphanedUploadCleanups();
+          if (result.processed > 0) {
+            console.log(`[Sweeper] Cleaned up ${result.resolved} orphaned uploads.`);
+          }
+        } catch (err: any) {
+          console.error('[Sweeper] Background cleanup error:', err.message);
+        }
+      }, SWEEPER_INTERVAL_MS);
+      sweeperTimer.unref();
+    }
 
     const app = createApp();
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { Property } from '../types';
@@ -24,12 +24,24 @@ export const ViewingModal: React.FC<ViewingModalProps> = ({ property, isOpen, on
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Escape key listener for modal dismissal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  // Minimum date should be tomorrow
+  // Minimum date should be tomorrow in user's local timezone (prevent UTC midnight drift)
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const minDateStr = tomorrow.toISOString().split('T')[0];
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+  const day = String(tomorrow.getDate()).padStart(2, '0');
+  const minDateStr = `${year}-${month}-${day}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,11 +106,20 @@ export const ViewingModal: React.FC<ViewingModalProps> = ({ property, isOpen, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+    >
       <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
         {/* Close Button */}
         <button
           onClick={onClose}
+          aria-label="Close viewing modal"
           className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
         >
           <X className="w-5 h-5" />
@@ -109,7 +130,7 @@ export const ViewingModal: React.FC<ViewingModalProps> = ({ property, isOpen, on
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-10 h-10" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Viewing Scheduled!</h3>
+            <h3 id="modal-title" className="text-xl font-bold text-slate-900 mb-2">Viewing Scheduled!</h3>
             <p className="text-sm text-slate-600 mb-6">
               Your site visit request for <strong className="text-slate-800">{property.title}</strong> on{' '}
               <span className="font-semibold text-sapphire-600">{date} at {time}</span> has been submitted. Our property executive will connect with you to confirm access.
@@ -128,7 +149,7 @@ export const ViewingModal: React.FC<ViewingModalProps> = ({ property, isOpen, on
                 <Calendar className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Schedule a Viewing</h3>
+                <h3 id="modal-title" className="text-lg font-bold text-slate-900">Schedule a Viewing</h3>
                 <p className="text-xs text-slate-500 truncate max-w-[320px]">{property.title}</p>
               </div>
             </div>

@@ -34,7 +34,10 @@ export const HomePage: React.FC = () => {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const params = new URLSearchParams();
-    if (city) params.append('city', city);
+    if (city.trim()) {
+      // Set search for locality, city, title keyword matching
+      params.append('search', city.trim());
+    }
     if (listingType) params.append('listingType', listingType);
     if (propertyType) params.append('propertyType', propertyType);
     navigate(`/properties?${params.toString()}`);

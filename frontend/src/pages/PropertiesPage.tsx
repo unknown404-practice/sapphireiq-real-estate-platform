@@ -19,6 +19,7 @@ export const PropertiesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Local state initialized from URL query params
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [city, setCity] = useState(searchParams.get('city') || '');
   const [listingType, setListingType] = useState(searchParams.get('listingType') || '');
   const [propertyType, setPropertyType] = useState(searchParams.get('propertyType') || '');
@@ -36,6 +37,7 @@ export const PropertiesPage: React.FC = () => {
 
   // Sync state with URL params when URL changes
   useEffect(() => {
+    setSearch(searchParams.get('search') || '');
     setCity(searchParams.get('city') || '');
     setListingType(searchParams.get('listingType') || '');
     setPropertyType(searchParams.get('propertyType') || '');
@@ -53,6 +55,7 @@ export const PropertiesPage: React.FC = () => {
       setError(null);
 
       const params: FilterParams = {
+        search: searchParams.get('search') || undefined,
         city: searchParams.get('city') || undefined,
         listingType: searchParams.get('listingType') || undefined,
         propertyType: searchParams.get('propertyType') || undefined,
@@ -84,9 +87,24 @@ export const PropertiesPage: React.FC = () => {
     fetchProperties();
   }, [searchParams]);
 
+  // Compute windowed page array (e.g. 1, 2, ..., current, ..., last)
+  const getPageNumbers = (current: number, total: number) => {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: (number | string)[] = [];
+    pages.push(1);
+    if (current > 3) pages.push('...');
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push('...');
+    pages.push(total);
+    return pages;
+  };
+
   // Apply filters by writing to URL params
   const applyFilters = () => {
     const params = new URLSearchParams();
+    if (search.trim()) params.set('search', search.trim());
     if (city) params.set('city', city);
     if (listingType) params.set('listingType', listingType);
     if (propertyType) params.set('propertyType', propertyType);
@@ -101,6 +119,7 @@ export const PropertiesPage: React.FC = () => {
   };
 
   const resetFilters = () => {
+    setSearch('');
     setCity('');
     setListingType('');
     setPropertyType('');
@@ -219,6 +238,23 @@ export const PropertiesPage: React.FC = () => {
               >
                 Rent
               </button>
+            </div>
+          </div>
+
+          {/* Keyword / Locality */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+              Keyword / Locality
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="e.g. Worli, Penthouse, Whitefield"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-sapphire-500 focus:border-sapphire-500 pl-8"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
             </div>
           </div>
 
@@ -371,19 +407,23 @@ export const PropertiesPage: React.FC = () => {
                       <ChevronLeft className="w-4 h-4" />
                     </button>
 
-                    {Array.from({ length: pagination.pages }, (_, i) => i + 1).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => handlePageChange(p)}
-                        className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${
-                          p === page
-                            ? 'bg-sapphire-600 text-white shadow-sm'
-                            : 'text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
+                    {getPageNumbers(page, pagination.pages).map((p, idx) =>
+                      typeof p === 'string' ? (
+                        <span key={`ellipsis-${idx}`} className="px-2 text-slate-400">...</span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => handlePageChange(p)}
+                          className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${
+                            p === page
+                              ? 'bg-sapphire-600 text-white shadow-sm'
+                              : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      )
+                    )}
 
                     <button
                       onClick={() => handlePageChange(page + 1)}

@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
 // Lazy-loaded pages for optimized bundle splitting
@@ -32,50 +33,52 @@ export function App() {
         <div className="flex flex-col min-h-screen bg-slate-50 font-sans antialiased text-slate-900">
           <Navbar />
           <main className="flex-1">
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                {/* Public Discovery Routes */}
-                <Route path="/" element={<HomePage />} />
-                <Route path="/properties" element={<PropertiesPage />} />
-                <Route path="/properties/:id" element={<PropertyDetailPage />} />
+            <ErrorBoundary>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  {/* Public Discovery Routes */}
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/properties" element={<PropertiesPage />} />
+                  <Route path="/properties/:id" element={<PropertyDetailPage />} />
 
-                {/* Authentication Routes */}
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  {/* Authentication Routes */}
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-                {/* Protected Client & Owner Routes */}
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <DashboardPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/properties/new"
-                  element={
-                    <ProtectedRoute>
-                      <CreateEditPropertyPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/properties/:id/edit"
-                  element={
-                    <ProtectedRoute>
-                      <CreateEditPropertyPage />
-                    </ProtectedRoute>
-                  }
-                />
+                  {/* Protected Client & Owner Routes */}
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <DashboardPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/properties/new"
+                    element={
+                      <ProtectedRoute>
+                        <CreateEditPropertyPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/properties/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <CreateEditPropertyPage />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                {/* 404 Fallback */}
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Suspense>
+                  {/* 404 Fallback */}
+                  <Route path="*" element={<NotFoundPage />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
           </main>
           <Footer />
         </div>

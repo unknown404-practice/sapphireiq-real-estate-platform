@@ -13,6 +13,11 @@
     "build:frontend": "npm --workspace=frontend run build",
     "build": "npm run build:backend && npm run build:frontend",
     "test": "npm --workspace=backend run test",
+    "test:frontend": "npm --workspace=frontend run test",
+    "test:all": "npm run test && npm run test:frontend",
     "seed": "npm --workspace=backend run seed"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }
