@@ -43,6 +43,16 @@ export function errorHandler(
       message = 'File size limit exceeded (maximum 5MB allowed per image)';
     } else if (multerCode === 'LIMIT_FILE_COUNT' || err.message === 'Too many files') {
       message = 'Maximum of 4 images allowed per property';
+    } else if (multerCode === 'LIMIT_FIELD_COUNT') {
+      message = 'Too many form fields in request';
+    } else if (multerCode === 'LIMIT_FIELD_VALUE') {
+      message = 'Field value size limit exceeded (maximum 1MB)';
+    } else if (multerCode === 'LIMIT_FIELD_KEY') {
+      message = 'Field name size limit exceeded';
+    } else if (multerCode === 'LIMIT_UNEXPECTED_FILE') {
+      message = 'Unexpected upload field or file count exceeded';
+    } else if (multerCode === 'LIMIT_PART_COUNT') {
+      message = 'Too many parts in multipart request';
     } else {
       message = err.message || 'File upload error';
     }
@@ -66,7 +76,7 @@ export function errorHandler(
   // Log error internally if server-side failure and sanitize in production
   if (statusCode >= 500) {
     console.error(`[Error] ${req.method} ${req.originalUrl}:`, err);
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' && statusCode === 500) {
       message = 'An unexpected internal server error occurred';
     }
   }

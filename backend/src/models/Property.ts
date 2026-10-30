@@ -120,4 +120,4 @@ PropertySchema.index(
   { weights: { title: 10, locality: 5, city: 3, description: 1 } }
 );
 
-export const Property = mongoose.model<IPropertyDocument>('Property', PropertySchema);
+export const Property = (mongoose.models.Property as mongoose.Model<IPropertyDocument>) || mongoose.model<IPropertyDocument>('Property', PropertySchema);

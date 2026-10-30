@@ -25,15 +25,21 @@ export async function authenticate(
     const decoded = jwt.verify(token, env.JWT_SECRET) as AuthUserPayload;
     const userDoc = await User.findById(decoded.id).select('tokenVersion');
     if (!userDoc || (userDoc.tokenVersion || 0) !== (decoded.tokenVersion || 0)) {
-      res.status(401).json({ success: false, error: 'Token has been revoked. Please log in again.' });
+      res.status(401).json({
+        success: false,
+        error: 'Token has been revoked. Please log in again.',
+        code: 'TOKEN_REVOKED',
+      });
       return;
     }
     req.user = decoded;
     next();
   } catch (err: any) {
+    const isExpired = err.name === 'TokenExpiredError';
     res.status(401).json({
       success: false,
-      error: 'Invalid or expired authentication token',
+      error: isExpired ? 'Authentication token has expired' : 'Invalid or expired authentication token',
+      code: isExpired ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN',
     });
   }
 }

@@ -7,6 +7,8 @@ import sharp, { Metadata } from 'sharp';
 import { env } from '../config/env';
 import { IPropertyImage } from '../types';
 import { OrphanedUpload, IOrphanedUpload } from '../models/OrphanedUpload';
+import { Property } from '../models/Property';
+import { Appointment } from '../models/Appointment';
 
 // Ensure local uploads directory exists
 const uploadsDir = path.resolve(__dirname, '../../uploads');
@@ -20,6 +22,10 @@ export const upload = multer({
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit per file
     files: 4, // Max 4 files
+    fields: 10, // Max non-file fields
+    fieldNameSize: 100, // Max field name size 100 bytes
+    fieldSize: 1 * 1024 * 1024, // Max field value size 1MB
+    parts: 20, // Max total parts (fields + files)
   },
   fileFilter: (_req, file, cb) => {
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
@@ -39,7 +45,21 @@ let imageKitClient: ImageKit | null = null;
 if (env.IMAGEKIT_PRIVATE_KEY) {
   imageKitClient = new ImageKit({
     privateKey: env.IMAGEKIT_PRIVATE_KEY,
+    ...(env.IMAGEKIT_PUBLIC_KEY ? { publicKey: env.IMAGEKIT_PUBLIC_KEY } : {}),
+    ...(env.IMAGEKIT_URL_ENDPOINT ? { urlEndpoint: env.IMAGEKIT_URL_ENDPOINT } : {}),
   });
+}
+
+export function isDurableStorageConfigured(): boolean {
+  return imageKitClient !== null;
+}
+
+export function getImageKitClient(): ImageKit | null {
+  return imageKitClient;
+}
+
+export function setImageKitClientForTesting(client: ImageKit | null): void {
+  imageKitClient = client;
 }
 
 export interface ImageValidationResult {
@@ -226,27 +246,50 @@ export async function processAndUploadImage(
   // Fully decode, validate raster, strip metadata, and re-encode
   const processed = await decodeAndSanitizeImage(file.buffer, file.mimetype);
 
-  // If ImageKit configured, upload sanitized buffer via modern @imagekit/nodejs SDK
+  // If ImageKit configured, upload sanitized buffer via modern @imagekit/nodejs SDK with retries
   if (imageKitClient) {
-    try {
-      const fileName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const uploadable = await toFile(processed.buffer, fileName, { type: processed.mimeType });
-      const response = await imageKitClient.files.upload({
-        file: uploadable,
-        fileName,
-        folder: '/sapphireiq/properties',
-      });
-      return {
-        url: response.url || '',
-        fileId: response.fileId || '',
-        caption: file.originalname,
-      };
-    } catch (err: any) {
-      console.error('[ImageService] ImageKit upload failed, falling back to local:', err.message);
+    let lastError: any = null;
+    const maxRetries = 2;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const fileName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const uploadable = await toFile(processed.buffer, fileName, { type: processed.mimeType });
+        const response = await imageKitClient.files.upload({
+          file: uploadable,
+          fileName,
+          folder: '/sapphireiq/properties',
+        });
+        return {
+          url: response.url || '',
+          fileId: response.fileId || '',
+          caption: file.originalname,
+        };
+      } catch (err: any) {
+        lastError = err;
+        console.error(`[ImageService] ImageKit upload attempt ${attempt}/${maxRetries} failed:`, err.message);
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
     }
+
+    if (process.env.NODE_ENV === 'production' || env.NODE_ENV === 'production') {
+      const error: any = new Error(
+        `Durable cloud image storage upload failed (${lastError?.message || 'Unknown network error'}). Ephemeral disk fallback is strictly disabled in production.`
+      );
+      error.statusCode = 503;
+      throw error;
+    }
+  } else if (process.env.NODE_ENV === 'production' || env.NODE_ENV === 'production') {
+    const error: any = new Error(
+      'Permanent cloud storage (ImageKit) is not configured. Ephemeral local disk fallback on Render is strictly disabled in production.'
+    );
+    error.statusCode = 503;
+    throw error;
   }
 
-  // Local storage fallback with verified extension and sanitized buffer
+  // Local storage fallback with verified extension and sanitized buffer (development/testing only)
   const safeRandomId = crypto.randomBytes(8).toString('hex');
   const filename = `${Date.now()}-${safeRandomId}${processed.extension}`;
   const filepath = path.join(uploadsDir, filename);
@@ -438,19 +481,44 @@ export async function retryOrphanedUploadCleanups(): Promise<{
  * Uses a configurable minimum-age grace period (default 1 hour) to protect in-progress uploads.
  */
 export async function reconcileDiskOrphans(
-  knownReferencedFiles: Set<string>,
+  knownReferencedFiles?: Set<string>,
   maxAgeMs = 60 * 60 * 1000
-): Promise<{ audited: number; purged: number }> {
+): Promise<{ audited: number; purged: number; removed: number; skippedActive: number; skippedRecent: number }> {
   let audited = 0;
   let purged = 0;
+  let skippedActive = 0;
+  let skippedRecent = 0;
 
   if (!fs.existsSync(uploadsDir)) {
-    return { audited: 0, purged: 0 };
+    return { audited: 0, purged: 0, removed: 0, skippedActive: 0, skippedRecent: 0 };
+  }
+
+  let referencedSet = knownReferencedFiles;
+  if (!referencedSet) {
+    referencedSet = new Set<string>();
+    try {
+      const properties = await Property.find({}, { images: 1 }).lean();
+      for (const prop of properties) {
+        if (Array.isArray(prop.images)) {
+          for (const img of prop.images) {
+            if (img?.url) referencedSet.add(img.url);
+            if (img?.fileId) referencedSet.add(img.fileId);
+          }
+        }
+      }
+      const appointments = await Appointment.find({}, { propertyThumbnail: 1 }).lean();
+      for (const appt of appointments) {
+        if (appt.propertyThumbnail) {
+          referencedSet.add(appt.propertyThumbnail);
+        }
+      }
+    } catch (err: any) {
+      console.warn('[ImageService] Failed to query active references for disk reconciliation:', err.message);
+    }
   }
 
   const normalizedUploadsDir = path.resolve(uploadsDir);
   const files = await fs.promises.readdir(uploadsDir);
-  const now = Date.now();
 
   for (const filename of files) {
     if (filename.startsWith('.')) continue;
@@ -464,21 +532,26 @@ export async function reconcileDiskOrphans(
     audited++;
 
     // Check if filename or url (/uploads/filename) is referenced by any active property or appointment
-    if (!knownReferencedFiles.has(filename) && !knownReferencedFiles.has(`/uploads/${filename}`)) {
-      try {
-        const stats = await fs.promises.stat(resolvedPath);
-        // Only purge if file age exceeds minimum-age grace period (protects in-progress form fills)
-        if (maxAgeMs <= 0 || Date.now() - stats.mtimeMs >= maxAgeMs) {
-          await fs.promises.unlink(resolvedPath);
-          purged++;
-        }
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') {
-          console.warn(`[ImageService] Failed to sweep untracked disk file ${filename}:`, err.message);
-        }
+    if (referencedSet.has(filename) || referencedSet.has(`/uploads/${filename}`)) {
+      skippedActive++;
+      continue;
+    }
+
+    try {
+      const stats = await fs.promises.stat(resolvedPath);
+      // Only purge if file age exceeds minimum-age grace period (protects in-progress form fills)
+      if (maxAgeMs <= 0 || Date.now() - stats.mtimeMs >= maxAgeMs) {
+        await fs.promises.unlink(resolvedPath);
+        purged++;
+      } else {
+        skippedRecent++;
+      }
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        console.warn(`[ImageService] Failed to sweep untracked disk file ${filename}:`, err.message);
       }
     }
   }
 
-  return { audited, purged };
+  return { audited, purged, removed: purged, skippedActive, skippedRecent };
 }

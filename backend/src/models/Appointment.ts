@@ -85,4 +85,4 @@ AppointmentSchema.index(
   { unique: true, partialFilterExpression: { status: 'pending', guestEmail: { $exists: true } } }
 );
 
-export const Appointment = mongoose.model<IAppointmentDocument>('Appointment', AppointmentSchema);
+export const Appointment = (mongoose.models.Appointment as mongoose.Model<IAppointmentDocument>) || mongoose.model<IAppointmentDocument>('Appointment', AppointmentSchema);

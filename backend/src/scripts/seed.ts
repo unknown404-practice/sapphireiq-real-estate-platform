@@ -4,22 +4,38 @@ import { Property } from '../models/Property';
 import { Appointment } from '../models/Appointment';
 import { connectDatabase, disconnectDatabase } from '../config/database';
 
-export async function seedDatabase(): Promise<void> {
-  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
-    console.error('[Fatal Seed Error] Refusing to seed database in production mode without ALLOW_PROD_SEED=true.');
-    process.exit(1);
+export async function seedDatabase(disconnectOnFinish = false): Promise<void> {
+  // STRICT SAFETY GUARD: Seeding is completely forbidden in production environments
+  if (process.env.NODE_ENV === 'production') {
+    const err = new Error('[Fatal Seed Error] Refusing to seed database in production mode. Seeding is development-only.');
+    console.error(err.message);
+    if (require.main === module) {
+      process.exit(1);
+    }
+    throw err;
   }
 
   try {
     await connectDatabase();
-    console.log('[Seed] Connected to database. Purging existing test records...');
+    console.log('[Seed] Connected to database. Executing safe, idempotent upsert seeding...');
 
-    await User.deleteMany({});
-    await Property.deleteMany({});
-    await Appointment.deleteMany({});
+    // Note: NEVER use deleteMany({}) to avoid wiping existing application or test records.
 
-    console.log('[Seed] Creating demo users...');
-    const user1 = await User.create({
+    console.log('[Seed] Upserting sample demo users...');
+    const upsertUser = async (userData: { name: string; email: string; password?: string; role: 'user' | 'admin'; phone?: string }) => {
+      let user = await User.findOne({ email: userData.email });
+      if (!user) {
+        user = await User.create(userData);
+      } else {
+        user.name = userData.name;
+        user.role = userData.role;
+        if (userData.phone) user.phone = userData.phone;
+        await user.save();
+      }
+      return user;
+    };
+
+    const user1 = await upsertUser({
       name: 'Aarav Sharma',
       email: 'user1@sapphireiq.local',
       password: 'Password123!',
@@ -27,7 +43,7 @@ export async function seedDatabase(): Promise<void> {
       phone: '+91 98765 43210',
     });
 
-    const user2 = await User.create({
+    const user2 = await upsertUser({
       name: 'Priya Mukherjee',
       email: 'user2@sapphireiq.local',
       password: 'Password123!',
@@ -35,20 +51,26 @@ export async function seedDatabase(): Promise<void> {
       phone: '+91 98765 43211',
     });
 
-    const admin = await User.create({
-      name: 'Sapphire Admin',
-      email: 'admin@sapphireiq.local',
-      password: 'AdminPassword123!',
-      role: 'admin',
-      phone: '+91 98765 43212',
-    });
+    // Administrative accounts must only be bootstrapped via explicit environment variables
+    let adminUser = null;
+    if (process.env.ADMIN_SEED_EMAIL && process.env.ADMIN_SEED_PASSWORD) {
+      adminUser = await upsertUser({
+        name: 'System Administrator',
+        email: process.env.ADMIN_SEED_EMAIL,
+        password: process.env.ADMIN_SEED_PASSWORD,
+        role: 'admin',
+        phone: '+91 98765 43212',
+      });
+      console.log(`[Seed] Bootstrapped administrative user from environment: ${process.env.ADMIN_SEED_EMAIL}`);
+    } else {
+      console.log('[Seed] No ADMIN_SEED_EMAIL/PASSWORD provided. Skipping admin user creation.');
+    }
 
-    console.log('[Seed] Created users:');
+    console.log('[Seed] Created / verified standard demo users:');
     console.log(' - user1@sapphireiq.local (Password123!)');
     console.log(' - user2@sapphireiq.local (Password123!)');
-    console.log(' - admin@sapphireiq.local (AdminPassword123!)');
 
-    console.log('[Seed] Creating property catalog...');
+    console.log('[Seed] Upserting sample property catalog...');
     const propertiesData = [
       {
         title: 'Luxurious 3BHK Sea-Facing Haven in Worli',
@@ -191,39 +213,72 @@ export async function seedDatabase(): Promise<void> {
       }
     ];
 
-    const createdProperties = await Property.insertMany(propertiesData);
-    console.log(`[Seed] Successfully inserted ${createdProperties.length} properties.`);
+    const createdProperties = [];
+    for (const prop of propertiesData) {
+      const saved = await Property.findOneAndUpdate(
+        { title: prop.title },
+        { $set: prop },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      createdProperties.push(saved);
+    }
+    console.log(`[Seed] Successfully upserted ${createdProperties.length} properties.`);
 
-    console.log('[Seed] Creating demo viewing appointments...');
-    await Appointment.create({
-      property: createdProperties[0]._id,
-      user: user2._id,
-      guestName: user2.name,
-      guestEmail: user2.email,
-      guestPhone: user2.phone,
-      scheduledAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-      status: 'pending',
-      notes: 'Interested in weekend site visit with family.',
-    });
+    console.log('[Seed] Upserting demo viewing appointments...');
+    if (createdProperties.length >= 2) {
+      await Appointment.findOneAndUpdate(
+        {
+          property: createdProperties[0]._id,
+          guestEmail: user2.email,
+        },
+        {
+          $set: {
+            property: createdProperties[0]._id,
+            user: user2._id,
+            guestName: user2.name,
+            guestEmail: user2.email,
+            guestPhone: user2.phone,
+            scheduledAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+            status: 'pending',
+            notes: 'Interested in weekend site visit with family.',
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
 
-    await Appointment.create({
-      property: createdProperties[1]._id,
-      guestName: 'Rohit Verma',
-      guestEmail: 'rohit.verma@example.com',
-      guestPhone: '+91 99887 76655',
-      scheduledAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), // 4 days from now
-      status: 'confirmed',
-      notes: 'Please confirm if interior tour of guest cottage is included.',
-    });
+      await Appointment.findOneAndUpdate(
+        {
+          property: createdProperties[1]._id,
+          guestEmail: 'rohit.verma@example.com',
+        },
+        {
+          $set: {
+            property: createdProperties[1]._id,
+            guestName: 'Rohit Verma',
+            guestEmail: 'rohit.verma@example.com',
+            guestPhone: '+91 99887 76655',
+            scheduledAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000),
+            status: 'confirmed',
+            notes: 'Please confirm if interior tour of guest cottage is included.',
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    }
 
     console.log('[Seed] Seed completed successfully!');
-    await disconnectDatabase();
+    if (disconnectOnFinish) {
+      await disconnectDatabase();
+    }
   } catch (error) {
     console.error('[Seed] Error seeding database:', error);
-    process.exit(1);
+    if (require.main === module) {
+      process.exit(1);
+    }
+    throw error;
   }
 }
 
 if (require.main === module) {
-  seedDatabase();
+  seedDatabase(true);
 }

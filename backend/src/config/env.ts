@@ -14,7 +14,7 @@ export const env = {
   MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/sapphireiq',
   JWT_SECRET: process.env.JWT_SECRET || (isProd ? '' : 'sapphireiq_secret_super_secure_key_1234567890'),
   JWT_EXPIRES_IN: '7d',
-  APP_ORIGIN: process.env.APP_ORIGIN || 'http://localhost:5173',
+  APP_ORIGIN: process.env.APP_ORIGIN || (isProd ? '' : 'http://localhost:5173'),
 
   // Email / SMTP
   SMTP_HOST: process.env.SMTP_HOST || '',

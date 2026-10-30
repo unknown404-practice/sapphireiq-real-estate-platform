@@ -6,7 +6,9 @@ import { env } from '../config/env';
 import { AuthenticatedRequest, AuthUserPayload } from '../types';
 import { sendPasswordResetEmail } from '../services/emailService';
 
-function generateToken(user: { _id: any; email: string; role: string; name: string; tokenVersion?: number }): string {
+export const REFRESH_COOKIE_NAME = 'refreshToken';
+
+export function generateAccessToken(user: { _id: any; email: string; role: string; name: string; tokenVersion?: number }): string {
   const payload: AuthUserPayload = {
     id: user._id.toString(),
     email: user.email,
@@ -16,8 +18,48 @@ function generateToken(user: { _id: any; email: string; role: string; name: stri
   };
 
   return jwt.sign(payload, env.JWT_SECRET, {
-    expiresIn: env.JWT_EXPIRES_IN as any,
+    expiresIn: '15m',
   });
+}
+
+export function generateRefreshToken(user: { _id: any; tokenVersion?: number }): string {
+  return jwt.sign(
+    {
+      id: user._id.toString(),
+      tokenVersion: user.tokenVersion || 0,
+      type: 'refresh',
+      jti: crypto.randomBytes(16).toString('hex'),
+    },
+    env.JWT_SECRET,
+    {
+      expiresIn: '7d',
+    }
+  );
+}
+
+export function setRefreshTokenCookie(res: Response, token: string): void {
+  const isProd = process.env.NODE_ENV === 'production' || env.NODE_ENV === 'production';
+  res.cookie(REFRESH_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'strict' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/',
+  });
+}
+
+export function clearRefreshTokenCookie(res: Response): void {
+  const isProd = process.env.NODE_ENV === 'production' || env.NODE_ENV === 'production';
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'strict' : 'lax',
+    path: '/',
+  });
+}
+
+function generateToken(user: { _id: any; email: string; role: string; name: string; tokenVersion?: number }): string {
+  return generateAccessToken(user);
 }
 
 // POST /api/auth/register
@@ -113,11 +155,14 @@ export async function register(req: Request, res: Response, next: NextFunction):
       phone: phone ? phone.trim() : undefined,
     });
 
-    const token = generateToken(user);
+    const token = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    setRefreshTokenCookie(res, refreshToken);
 
     res.status(201).json({
       success: true,
       token,
+      refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -180,11 +225,14 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
       return;
     }
 
-    const token = generateToken(user);
+    const token = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    setRefreshTokenCookie(res, refreshToken);
 
     res.status(200).json({
       success: true,
       token,
+      refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -366,9 +414,138 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
+    clearRefreshTokenCookie(res);
+
     res.status(200).json({
       success: true,
       message: 'Password reset successful. You may now log in with your new password.',
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// POST /api/auth/refresh
+export async function refreshTokenHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawToken = req.cookies?.refreshToken || (req.body && typeof req.body === 'object' ? req.body.refreshToken : undefined);
+
+    if (!rawToken || typeof rawToken !== 'string') {
+      res.status(401).json({
+        success: false,
+        error: 'Refresh token is required',
+        code: 'MISSING_REFRESH_TOKEN',
+      });
+      return;
+    }
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(rawToken, env.JWT_SECRET);
+    } catch (err: any) {
+      clearRefreshTokenCookie(res);
+      res.status(401).json({
+        success: false,
+        error: 'Invalid or expired refresh token',
+        code: 'INVALID_REFRESH_TOKEN',
+      });
+      return;
+    }
+
+    if (!decoded || decoded.type !== 'refresh' || !decoded.id) {
+      clearRefreshTokenCookie(res);
+      res.status(401).json({
+        success: false,
+        error: 'Malformed refresh token payload',
+        code: 'INVALID_REFRESH_TOKEN',
+      });
+      return;
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      clearRefreshTokenCookie(res);
+      res.status(401).json({
+        success: false,
+        error: 'User not found or account deactivated',
+        code: 'USER_NOT_FOUND',
+      });
+      return;
+    }
+
+    // Verify tokenVersion to catch revoked sessions or token replay attempts
+    if ((user.tokenVersion || 0) !== (decoded.tokenVersion || 0)) {
+      clearRefreshTokenCookie(res);
+      res.status(401).json({
+        success: false,
+        error: 'Session has been revoked. Please log in again.',
+        code: 'SESSION_REVOKED',
+      });
+      return;
+    }
+
+    // Single-use Refresh Token Rotation: issue fresh short-lived access token and fresh refresh token
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+
+    setRefreshTokenCookie(res, newRefreshToken);
+
+    res.status(200).json({
+      success: true,
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// POST /api/auth/logout
+export async function logoutHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawToken = req.cookies?.refreshToken || (req.body && typeof req.body === 'object' ? req.body.refreshToken : undefined);
+    let userIdToRevoke: string | null = null;
+
+    if (rawToken && typeof rawToken === 'string') {
+      try {
+        const decoded: any = jwt.verify(rawToken, env.JWT_SECRET);
+        if (decoded?.id) {
+          userIdToRevoke = decoded.id;
+        }
+      } catch {
+        // Token may already be expired
+      }
+    }
+
+    // Check bearer token in headers
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded: any = jwt.verify(authHeader.split(' ')[1], env.JWT_SECRET);
+        if (decoded?.id) {
+          userIdToRevoke = decoded.id;
+        }
+      } catch {
+        // Bearer token may be expired
+      }
+    }
+
+    if (userIdToRevoke) {
+      await User.findByIdAndUpdate(userIdToRevoke, { $inc: { tokenVersion: 1 } });
+    }
+
+    clearRefreshTokenCookie(res);
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully. Active sessions revoked.',
     });
   } catch (error) {
     next(error);

@@ -1,6 +1,7 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import routes from './routes';
 import { env } from './config/env';
@@ -10,6 +11,9 @@ import { standardLimiter } from './middleware/rateLimiter';
 export function createApp(): Application {
   const app: Application = express();
 
+  // NET-01: Trust Render edge reverse proxy (1 hop) for accurate client IP resolution & rate limiting
+  app.set('trust proxy', 1);
+
   // HTTP Security Headers
   app.use(
     helmet({
@@ -17,13 +21,28 @@ export function createApp(): Application {
     })
   );
 
-  // Strict CORS configuration supporting multi-origin and production Vercel frontend deployments
-  const configuredOrigins = env.APP_ORIGIN
-    ? env.APP_ORIGIN.split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean)
-    : [];
-  const allowedOrigins = Array.from(
-    new Set([...configuredOrigins, 'http://localhost:5173', 'http://127.0.0.1:5173'])
-  );
+  // Cookie Parser for secure HttpOnly session refresh tokens
+  app.use(cookieParser());
+
+  // SEC-03: Strict CORS configuration supporting multi-origin and verified production Vercel deployments
+  const isProd = process.env.NODE_ENV === 'production' || env.NODE_ENV === 'production';
+  const rawOrigins = (process.env.APP_ORIGIN !== undefined ? process.env.APP_ORIGIN : env.APP_ORIGIN || '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
+  // In production, strictly disallow localhost and loopback interfaces
+  const configuredOrigins = isProd
+    ? rawOrigins.filter((o) => !o.includes('localhost') && !o.includes('127.0.0.1'))
+    : rawOrigins;
+
+  // In non-production, include local development origins
+  const devOrigins = isProd
+    ? []
+    : ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://localhost:4173'];
+
+  const allowedOrigins = Array.from(new Set([...configuredOrigins, ...devOrigins]));
+
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -35,22 +54,14 @@ export function createApp(): Application {
 
         const normalizedOrigin = origin.replace(/\/+$/, '');
         const isExplicitlyAllowed = allowedOrigins.includes(normalizedOrigin);
-        // Automatically support Vercel preview deployments that match the specific project prefix
-        const vercelPrefixes = allowedOrigins
-          .filter((ao) => ao.includes('.vercel.app'))
-          .flatMap((ao) => {
-            const host = ao.replace(/^https?:\/\//, '').replace(/\.vercel\.app$/, '');
-            return [host, host.split('-')[0]];
-          })
-          .filter(Boolean);
 
-        const isVercelDomain =
-          vercelPrefixes.length > 0 &&
-          vercelPrefixes.some((prefix) =>
-            new RegExp(`^https:\\/\\/${prefix}(-[a-zA-Z0-9_-]+)?\\.vercel\\.app$`).test(normalizedOrigin)
-          );
+        // Strict Vercel preview domain pattern matching:
+        // Must strictly match official project prefix without splitting by hyphen
+        const isStrictVercelPreview = /^https:\/\/sapphireiq-real-estate-platform-[a-z0-9_-]+\.vercel\.app$/i.test(
+          normalizedOrigin
+        );
 
-        if (isExplicitlyAllowed || isVercelDomain) {
+        if (isExplicitlyAllowed || isStrictVercelPreview) {
           callback(null, true);
         } else {
           callback(null, false);
@@ -66,8 +77,11 @@ export function createApp(): Application {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Safe Request Logger (no passwords or tokens logged)
-  app.use((req: Request, _res: Response, next) => {
+  // Safe Request Logger and Client IP Resolution header
+  app.use((req: Request, res: Response, next) => {
+    if (req.ip) {
+      res.setHeader('X-Client-IP', req.ip);
+    }
     if (process.env.NODE_ENV !== 'test') {
       console.log(`[HTTP] ${req.method} ${req.path}`);
     }

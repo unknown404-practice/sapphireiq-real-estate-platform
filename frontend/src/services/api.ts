@@ -12,14 +12,18 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...getAuthHeader(),
-    ...options.headers,
+    ...((options.headers as Record<string, string>) || {}),
   };
 
   try {
-    const res = await fetch(url, { ...options, headers });
+    const res = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
     let data: any;
 
     const contentType = res.headers.get('content-type');
@@ -28,6 +32,43 @@ async function request<T>(
     } else {
       const text = await res.text();
       data = { error: text || `HTTP ${res.status}` };
+    }
+
+    // Auto-refresh access token on 401 if refresh session is active
+    if (
+      res.status === 401 &&
+      endpoint !== '/auth/refresh' &&
+      endpoint !== '/auth/login' &&
+      endpoint !== '/auth/register'
+    ) {
+      try {
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          if (refreshData.token) {
+            localStorage.setItem('token', refreshData.token);
+            // Replay original request with refreshed access token
+            const retryHeaders = {
+              ...headers,
+              Authorization: `Bearer ${refreshData.token}`,
+            };
+            const retryRes = await fetch(url, {
+              ...options,
+              headers: retryHeaders,
+              credentials: 'include',
+            });
+            if (retryRes.headers.get('content-type')?.includes('application/json')) {
+              return await retryRes.json();
+            }
+          }
+        }
+      } catch {
+        // Refresh attempt failed, continue to return original 401 error
+      }
     }
 
     if (!res.ok) {
@@ -50,16 +91,28 @@ export const api = {
   // Authentication
   auth: {
     async register(payload: { name: string; email: string; password: string; phone?: string }) {
-      return request<{ user: User; token: string }>('/auth/register', {
+      return request<{ user: User; token: string; refreshToken?: string }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
     },
 
     async login(payload: { email: string; password: string }) {
-      return request<{ user: User; token: string }>('/auth/login', {
+      return request<{ user: User; token: string; refreshToken?: string }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(payload),
+      });
+    },
+
+    async logout() {
+      return request<{ message: string }>('/auth/logout', {
+        method: 'POST',
+      });
+    },
+
+    async refresh() {
+      return request<{ user: User; token: string; refreshToken?: string }>('/auth/refresh', {
+        method: 'POST',
       });
     },
 

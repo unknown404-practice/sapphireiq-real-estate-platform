@@ -1,7 +1,7 @@
 import { createApp } from './app';
 import { env, isProduction } from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
-import { retryOrphanedUploadCleanups } from './services/imageService';
+import { retryOrphanedUploadCleanups, reconcileDiskOrphans } from './services/imageService';
 
 async function startServer(): Promise<void> {
   try {
@@ -12,17 +12,29 @@ async function startServer(): Promise<void> {
       console.warn('[Security Warning] JWT_SECRET is missing or short. Using local fallback.');
     }
 
+    if (isProduction && !env.IMAGEKIT_PRIVATE_KEY) {
+      console.warn('[Storage Warning] IMAGEKIT_PRIVATE_KEY is not configured in production. Ephemeral disk fallback is disabled; image uploads will be rejected until configured.');
+    }
+
     // Connect to Database
     await connectDatabase();
+
+    // Scheduled background orphan cleaner timer
+    let sweeperTimer: NodeJS.Timeout | null = null;
 
     // Run automated orphan sweeper every 6 hours in non-test mode
     if (process.env.NODE_ENV !== 'test') {
       const SWEEPER_INTERVAL_MS = 6 * 60 * 60 * 1000;
-      const sweeperTimer = setInterval(async () => {
+      sweeperTimer = setInterval(async () => {
         try {
-          const result = await retryOrphanedUploadCleanups();
-          if (result.processed > 0) {
-            console.log(`[Sweeper] Cleaned up ${result.resolved} orphaned uploads.`);
+          const queueResult = await retryOrphanedUploadCleanups();
+          if (queueResult.processed > 0) {
+            console.log(`[Sweeper] Cleaned up ${queueResult.resolved} orphaned uploads from queue.`);
+          }
+
+          const diskResult = await reconcileDiskOrphans();
+          if (diskResult.removed > 0) {
+            console.log(`[Sweeper] Reconciled and removed ${diskResult.removed} stranded unreferenced disk files.`);
           }
         } catch (err: any) {
           console.error('[Sweeper] Background cleanup error:', err.message);
@@ -41,6 +53,9 @@ async function startServer(): Promise<void> {
     // Graceful Shutdown handlers
     const shutdown = async (signal: string) => {
       console.log(`\n[Server] Received ${signal}. Shutting down gracefully...`);
+      if (sweeperTimer) {
+        clearInterval(sweeperTimer);
+      }
       server.close(async () => {
         await disconnectDatabase();
         console.log('[Server] Closed remaining connections. Exiting process.');

@@ -22,13 +22,19 @@ SapphireIQ is an enterprise-grade full-stack real estate platform engineered wit
 
 ## 🔑 Pre-Configured Demo Credentials
 
-The platform includes demo accounts for testing role-based privileges:
+The platform includes sample non-privileged accounts for local development and testing:
 
-| Role | Email Address | Password | Permissions |
-| :--- | :--- | :--- | :--- |
-| **Standard User** | `user1@sapphireiq.local` | `Password123!` | Search properties, book viewings, view personal appointments |
-| **Property Owner** | `user2@sapphireiq.local` | `Password123!` | Create, update, upload images, and manage property listings |
-| **Platform Admin** | `admin@sapphireiq.local` | `AdminPassword123!` | Full administrative moderation over properties and bookings |
+| Role | Email Address | Password | Permissions | Environment |
+| :--- | :--- | :--- | :--- | :--- |
+| **Standard User** | `user1@sapphireiq.local` | `Password123!` | Search properties, book viewings, view personal appointments | Local / Development Only |
+| **Property Owner** | `user2@sapphireiq.local` | `Password123!` | Create, update, upload images, and manage property listings | Local / Development Only |
+
+> [!NOTE]
+> **Admin Account Provisioning:** Administrative credentials are never stored in source control or public documentation. To bootstrap a local administrator account, supply the `ADMIN_SEED_EMAIL` and `ADMIN_SEED_PASSWORD` environment variables before running the database seeder:
+> ```bash
+> ADMIN_SEED_EMAIL="your-admin@domain.com" ADMIN_SEED_PASSWORD="YourSecurePassword123!" npm run seed
+> ```
+> In production, administrative users must be provisioned through secure direct operations or dedicated administrative onboarding. Database seeding is strictly blocked in production (`NODE_ENV=production`).
 
 ---
 

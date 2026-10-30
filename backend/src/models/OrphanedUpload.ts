@@ -28,4 +28,4 @@ const OrphanedUploadSchema = new Schema<IOrphanedUpload>(
   { timestamps: true }
 );
 
-export const OrphanedUpload = mongoose.model<IOrphanedUpload>('OrphanedUpload', OrphanedUploadSchema);
+export const OrphanedUpload = (mongoose.models.OrphanedUpload as mongoose.Model<IOrphanedUpload>) || mongoose.model<IOrphanedUpload>('OrphanedUpload', OrphanedUploadSchema);
